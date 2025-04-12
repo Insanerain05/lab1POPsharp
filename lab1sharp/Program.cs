@@ -9,7 +9,7 @@ class Program
     static void Main(string[] args)
     {
         int[] threadIds = { 1, 2, 3, 4 };
-        int[] delays = { 7000, 2000, 5000, 1000 };
+        int[] delays = { 8000, 2000, 5000, 1000 };
         int[] steps = { 1, 2, 5, 7 };
 
         BreakThread breakThread = new BreakThread(threadIds, delays);
@@ -45,12 +45,19 @@ class MainThread
 
     private void Run()
     {
+        while (!breakThread.CanBreak(id))
+        {
+            Thread.Sleep(1);
+        }
+
         Stopwatch stopwatch = Stopwatch.StartNew();
         long sum = 0;
         int count = 0;
         int value = 0;
 
-        while (!breakThread.CanBreak(id))
+        int workDuration = breakThread.GetDelay(id);
+
+        while (stopwatch.ElapsedMilliseconds < workDuration)
         {
             sum += value;
             value += step;
@@ -59,7 +66,8 @@ class MainThread
         }
 
         stopwatch.Stop();
-        Console.WriteLine($"Потік {id}: Сума = {sum}, Доданків = {count}, Час = {stopwatch.ElapsedMilliseconds} мс");
+        int timeInSeconds = (int)Math.Round(stopwatch.ElapsedMilliseconds / 1000.0);
+        Console.WriteLine($"Потік {id}: Сума = {sum}, Доданків = {count}, Час = {timeInSeconds} сек");
     }
 }
 
@@ -87,5 +95,10 @@ class BreakThread
     public bool CanBreak(int id)
     {
         return canBreakMap.TryGetValue(id, out bool canBreak) && canBreak;
+    }
+
+    public int GetDelay(int id)
+    {
+        return threadDelays.FirstOrDefault(t => t.id == id).delay;
     }
 }
