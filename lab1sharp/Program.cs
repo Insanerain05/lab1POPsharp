@@ -6,99 +6,68 @@ using System.Threading;
 
 class Program
 {
+    static int threadCount;
+    static int[] durations;  
+    static int[] steps;      
+    static bool[] canStop;
+
     static void Main(string[] args)
     {
-        int[] threadIds = { 1, 2, 3, 4 };
-        int[] delays = { 8000, 2000, 5000, 1000 };
-        int[] steps = { 1, 2, 5, 7 };
+        threadCount = 4;
+        durations = new int[] { 3000, 2000, 5000, 4000 }; 
+        steps = new int[] { 1, 2, 3, 4 };
 
-        BreakThread breakThread = new BreakThread(threadIds, delays);
+        canStop = new bool[threadCount];
+        Thread[] threads = new Thread[threadCount];
 
-        for (int i = 0; i < threadIds.Length; i++)
+        for (int i = 0; i < threadCount; i++)
         {
-            new MainThread(threadIds[i], steps[i], breakThread).Start();
+            int index = i;
+            int time = durations[i];
+            int step = steps[i];
+            threads[i] = new Thread(() => CalculateSum(index, step, time));
+            threads[i].Start();
         }
 
-        new Thread(breakThread.Run).Start();
-    }
-}
-
-class MainThread
-{
-    private readonly int id;
-    private readonly int step;
-    private readonly BreakThread breakThread;
-    private Thread thread;
-
-    public MainThread(int id, int step, BreakThread breakThread)
-    {
-        this.id = id;
-        this.step = step;
-        this.breakThread = breakThread;
-        this.thread = new Thread(Run);
+        Thread controller = new Thread(TimeController);
+        controller.Start();
     }
 
-    public void Start()
+    static void CalculateSum(int threadIndex, int step, int time)
     {
-        thread.Start();
-    }
-
-    private void Run()
-    {
-        while (!breakThread.CanBreak(id))
-        {
-            Thread.Sleep(1);
-        }
-
-        Stopwatch stopwatch = Stopwatch.StartNew();
         long sum = 0;
+        int current = 0;
         int count = 0;
-        int value = 0;
 
-        int workDuration = breakThread.GetDelay(id);
-
-        while (stopwatch.ElapsedMilliseconds < workDuration)
+        while (!canStop[threadIndex])
         {
-            sum += value;
-            value += step;
+            sum += current;
+            current += step;
             count++;
-            Thread.Sleep(1);
         }
 
-        stopwatch.Stop();
-        int timeInSeconds = (int)Math.Round(stopwatch.ElapsedMilliseconds / 1000.0);
-        Console.WriteLine($"Потік {id}: Сума = {sum}, Доданків = {count}, Час = {timeInSeconds} сек");
-    }
-}
-
-class BreakThread
-{
-    private readonly ConcurrentDictionary<int, bool> canBreakMap = new ConcurrentDictionary<int, bool>();
-    private readonly (int id, int delay)[] threadDelays;
-
-    public BreakThread(int[] threadIds, int[] delays)
-    {
-        threadDelays = threadIds.Zip(delays, (id, delay) => (id, delay))
-                                .OrderBy(t => t.delay)
-                                .ToArray();
+        Console.WriteLine($"Потiк {threadIndex + 1}: сума = {sum}, крок = {step}, доданкiв = {count}, час = {time / 1000} сек");
     }
 
-    public void Run()
+    static void TimeController()
     {
-        foreach (var (id, delay) in threadDelays)
+        int[] sortedIndexes = new int[threadCount];
+        int[] sortedDurations = new int[threadCount];
+        durations.CopyTo(sortedDurations, 0);
+
+        for (int i = 0; i < threadCount; i++)
+            sortedIndexes[i] = i;
+
+        Array.Sort(sortedDurations, sortedIndexes);
+
+        int prevTime = 0;
+        for (int i = 0; i < threadCount; i++)
         {
-            Thread.Sleep(delay);
-            canBreakMap[id] = true;
+            int index = sortedIndexes[i];
+            int sleepTime = sortedDurations[i] - prevTime;
+            Thread.Sleep(sleepTime);
+            canStop[index] = true;
+            prevTime = sortedDurations[i];
         }
-    }
-
-    public bool CanBreak(int id)
-    {
-        return canBreakMap.TryGetValue(id, out bool canBreak) && canBreak;
-    }
-
-    public int GetDelay(int id)
-    {
-        return threadDelays.FirstOrDefault(t => t.id == id).delay;
     }
 }
